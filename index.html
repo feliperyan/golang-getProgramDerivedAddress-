@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TinyGo Solana PDA Calculator</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 2rem; max-width: 600px; margin: 0 auto; background: #f4f4f9; }
+        .card { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        input { width: 100%; padding: 8px; margin: 8px 0; box-sizing: border-box; }
+        button { background: #6366f1; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #4f46e5; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        pre { background: #2d2d2d; color: #86efac; padding: 1rem; border-radius: 4px; overflow-x: auto; }
+        .status { font-size: 0.85rem; color: #666; margin-bottom: 1rem; }
+        .error { color: #ef4444; }
+    </style>
+    
+    <script src="wasm_exec.js"></script>
+</head>
+<body>
+
+    <div class="card">
+        <h2>Solana PDA Derivation (WASM)</h2>
+        <div id="status" class="status">Initializing WebAssembly...</div>
+
+        <label><strong>Program ID:</strong></label>
+        <input type="text" id="programId" value="TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA">
+
+        <br><br>
+        <label><strong>Seeds (Hardcoded in JS for Demo):</strong></label>
+        <ul>
+            <li>String: "my-seed-prefix"</li>
+            <li>Uint8Array: [1, 2, 3]</li>
+        </ul>
+
+        <button id="calcBtn" onclick="derive()" disabled>Calculate PDA</button>
+
+        <h3>Result:</h3>
+        <pre id="output">// Waiting for calculation...</pre>
+    </div>
+
+    <script>
+        const go = new Go();
+        let wasmReady = false;
+
+        // 1. Load the WASM file
+        WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
+            // 2. Run the Go instance
+            go.run(result.instance);
+            
+            // 3. Enable UI
+            wasmReady = true;
+            document.getElementById("status").innerText = "✅ WASM Loaded & Ready";
+            document.getElementById("calcBtn").disabled = false;
+            console.log("WASM Initialized");
+        }).catch((err) => {
+            document.getElementById("status").innerHTML = `<span class="error">Failed to load WASM: ${err}</span>`;
+            console.error(err);
+        });
+
+        // 4. The function called when button is clicked
+        function derive() {
+            if (!wasmReady) return;
+
+            const progId = document.getElementById("programId").value;
+            const outputEl = document.getElementById("output");
+
+            // --- DEMONSTRATING MIXED SEEDS ---
+            // In Solana, seeds are usually a mix of Strings and PublicKeys (bytes).
+            // Our Go script handles both.
+            
+            const seed1 = "my-seed-prefix";           // String
+            const seed2 = new Uint8Array([1, 2, 3]);  // Byte Array (Simulating a PublicKey/bump)
+
+            const seeds = [seed1, seed2];
+
+            try {
+                // Call the Go function exposed via syscall/js
+                console.time("Execution Time");
+                const result = window.getProgramDerivedAddress(progId, seeds);
+                console.timeEnd("Execution Time");
+
+                if (result.error) {
+                    outputEl.innerText = "Error: " + result.error;
+                    outputEl.style.color = "#ef4444"; // Red
+                } else {
+                    outputEl.innerText = JSON.stringify(result, null, 2);
+                    outputEl.style.color = "#86efac"; // Green
+                }
+
+            } catch (e) {
+                outputEl.innerText = "WASM Panic or Error: " + e;
+            }
+        }
+    </script>
+</body>
+</html>
